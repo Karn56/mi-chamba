@@ -1,383 +1,364 @@
-﻿import { useEffect, useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
-import { supabase } from "../lib/supabase"
+﻿import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "../lib/supabase";
+import MapaArcgis from "../components/MapaArcgis";
 
-function SolicitarServicio() {
-    const [loading, setLoading] = useState(true)
-    const [userId, setUserId] = useState("")
-    const [tecnicos, setTecnicos] = useState([])
-    const [filtro, setFiltro] = useState("")
-    const [selectedTecnico, setSelectedTecnico] = useState(null)
+export default function SolicitarServicio() {
+    const [usuario, setUsuario] = useState(null);
+    const [ubicacion, setUbicacion] = useState(null);
+    const [ubicacionError, setUbicacionError] = useState("");
 
-    const [servicio, setServicio] = useState("")
-    const [descripcion, setDescripcion] = useState("")
-    const [clienteLat, setClienteLat] = useState("")
-    const [clienteLng, setClienteLng] = useState("")
-    const [message, setMessage] = useState("")
-    const [sending, setSending] = useState(false)
+    const [tecnicos, setTecnicos] = useState([]);
+    const [tecnicoSeleccionado, setTecnicoSeleccionado] = useState(null);
 
-    const navigate = useNavigate()
+    const [especialidadFiltro, setEspecialidadFiltro] = useState("");
+    const [busqueda, setBusqueda] = useState("");
+
+    const [servicio, setServicio] = useState("");
+    const [descripcion, setDescripcion] = useState("");
+
+    const [cargando, setCargando] = useState(true);
+    const [enviando, setEnviando] = useState(false);
+    const [error, setError] = useState("");
+    const [mensaje, setMensaje] = useState("");
+    const navigate = useNavigate();
 
     useEffect(() => {
-        const fetchData = async () => {
+        const cargarDatos = async () => {
             try {
+                setCargando(true);
+                setError("");
+
                 const {
                     data: { user },
-                } = await supabase.auth.getUser()
+                    error: userError,
+                } = await supabase.auth.getUser();
 
-                if (!user) {
-                    navigate("/login")
-                    return
+                if (userError || !user) {
+                    console.error(userError);
+                    setError("No se pudo obtener la sesión del usuario.");
+                    setCargando(false);
+                    return;
                 }
 
-                const { data: profileData } = await supabase
-                    .from("profiles")
-                    .select("role")
-                    .eq("id", user.id)
-                    .maybeSingle()
+                setUsuario(user);
 
-                if (profileData?.role !== "cliente") {
-                    navigate("/dashboard")
-                    return
-                }
-
-                setUserId(user.id)
-
-                const { data: tecnicosData, error: tecnicosError } = await supabase
+                const { data, error } = await supabase
                     .from("tecnicos")
                     .select(`
-                        id,
-                        nombre,
-                        telefono,
-                        especialidad,
-                        experiencia_anios,
-                        descripcion,
-                        lat,
-                        lng,
-                        disponible,
-                        identidad_verificada,
-                        antecedentes_verificados,
-                        tecnico_verificado,
-                        calificacion_promedio,
-                        trabajos_completados
-                    `)
+            id,
+            nombre,
+            telefono,
+            especialidad,
+            experiencia_anios,
+            descripcion,
+            lat,
+            lng,
+            disponible,
+            identidad_verificada,
+            antecedentes_verificados,
+            tecnico_verificado,
+            calificacion_promedio,
+            trabajos_completados
+          `)
                     .eq("disponible", true)
+                    .not("lat", "is", null)
+                    .not("lng", "is", null)
                     .order("tecnico_verificado", { ascending: false })
-                    .order("calificacion_promedio", { ascending: false })
+                    .order("calificacion_promedio", { ascending: false });
 
-                if (tecnicosError) {
-                    setMessage("No se pudieron cargar los técnicos.")
+                if (error) {
+                    console.error(error);
+                    setError("No se pudieron cargar los técnicos.");
                 } else {
-                    setTecnicos(tecnicosData || [])
+                    setTecnicos(data || []);
                 }
-            } catch (error) {
-                console.error(error)
-                setMessage("Ocurrió un error al cargar la página.")
+            } catch (err) {
+                console.error(err);
+                setError("Ocurrió un error inesperado.");
             } finally {
-                setLoading(false)
+                setCargando(false);
             }
-        }
+        };
 
-        fetchData()
-    }, [navigate])
+        cargarDatos();
+    }, []);
 
-    const obtenerUbicacion = () => {
-        setMessage("")
-
+    useEffect(() => {
         if (!navigator.geolocation) {
-            setMessage("Tu navegador no permite obtener la ubicación.")
-            return
+            setUbicacionError("Tu navegador no permite obtener ubicación.");
+            return;
         }
 
         navigator.geolocation.getCurrentPosition(
-            (position) => {
-                setClienteLat(position.coords.latitude.toString())
-                setClienteLng(position.coords.longitude.toString())
+            (pos) => {
+                setUbicacion({
+                    lat: pos.coords.latitude,
+                    lng: pos.coords.longitude,
+                });
+                setUbicacionError("");
             },
             () => {
-                setMessage("No se pudo obtener tu ubicación.")
+                setUbicacionError("No se pudo obtener tu ubicación.");
             }
-        )
-    }
+        );
+    }, []);
 
-    const handleSelectTecnico = (tecnico) => {
-        setSelectedTecnico(tecnico)
-        setServicio(tecnico.especialidad || "")
-    }
+    const especialidades = useMemo(() => {
+        return [...new Set(tecnicos.map((t) => t.especialidad).filter(Boolean))].sort();
+    }, [tecnicos]);
 
-    const handleSubmit = async (e) => {
-        e.preventDefault()
-        setMessage("")
+    const tecnicosFiltrados = useMemo(() => {
+        return tecnicos.filter((t) => {
+            const matchEspecialidad = especialidadFiltro
+                ? t.especialidad === especialidadFiltro
+                : true;
 
-        if (!selectedTecnico) {
-            setMessage("Debes seleccionar un técnico.")
-            return
+            const textoBusqueda =
+                `${t.nombre || ""} ${t.especialidad || ""} ${t.descripcion || ""}`.toLowerCase();
+
+            const matchBusqueda = busqueda
+                ? textoBusqueda.includes(busqueda.toLowerCase())
+                : true;
+
+            return matchEspecialidad && matchBusqueda;
+        });
+    }, [tecnicos, especialidadFiltro, busqueda]);
+
+    const enviarSolicitud = async (e) => {
+        e.preventDefault();
+        setError("");
+        setMensaje("");
+
+        if (!usuario) {
+            setError("No hay sesión activa.");
+            return;
+        }
+
+        if (!ubicacion?.lat || !ubicacion?.lng) {
+            setError("Necesitamos tu ubicación para enviar la solicitud.");
+            return;
+        }
+
+        if (!tecnicoSeleccionado) {
+            setError("Selecciona un técnico antes de continuar.");
+            return;
         }
 
         if (!servicio.trim()) {
-            setMessage("Debes indicar el tipo de servicio.")
-            return
+            setError("Escribe el servicio que necesitas.");
+            return;
         }
-
-        if (!clienteLat || !clienteLng) {
-            setMessage("Debes ingresar tu ubicación o usar el botón de geolocalización.")
-            return
-        }
-
-        setSending(true)
 
         try {
-            const { error } = await supabase.from("solicitudes").insert([
-                {
-                    cliente_id: userId,
-                    tecnico_id: selectedTecnico.id,
-                    servicio: servicio.trim(),
-                    descripcion: descripcion.trim(),
-                    cliente_lat: Number(clienteLat),
-                    cliente_lng: Number(clienteLng),
-                    estado: "pendiente",
-                },
-            ])
+            setEnviando(true);
+
+            const { error } = await supabase.from("solicitudes").insert({
+                cliente_id: usuario.id,
+                tecnico_id: tecnicoSeleccionado.id,
+                servicio: servicio.trim(),
+                descripcion: descripcion.trim() || null,
+                cliente_lat: ubicacion.lat,
+                cliente_lng: ubicacion.lng,
+                estado: "pendiente",
+            });
 
             if (error) {
-                setMessage("No se pudo enviar la solicitud.")
-                setSending(false)
-                return
+                console.error(error);
+                setError("No se pudo enviar la solicitud.");
+                return;
             }
 
-            setMessage("Solicitud enviada correctamente.")
-            setDescripcion("")
-            setClienteLat("")
-            setClienteLng("")
-            setSelectedTecnico(null)
-            setServicio("")
+            setMensaje("Solicitud enviada correctamente.");
+            setServicio("");
+            setDescripcion("");
+            setTecnicoSeleccionado(null);
 
             setTimeout(() => {
-                navigate("/solicitudes")
-            }, 1200)
-        } catch (error) {
-            console.error(error)
-            setMessage("Ocurrió un error inesperado.")
+                navigate("/solicitudes");
+            }, 1000);
+        } catch (err) {
+            console.error(err);
+            setError("Ocurrió un error al enviar la solicitud.");
         } finally {
-            setSending(false)
+            setEnviando(false);
         }
-    }
-
-    const tecnicosFiltrados = tecnicos.filter((tecnico) => {
-        const texto = filtro.toLowerCase()
-        return (
-            tecnico.nombre?.toLowerCase().includes(texto) ||
-            tecnico.especialidad?.toLowerCase().includes(texto)
-        )
-    })
-
-    if (loading) {
-        return (
-            <div className="app-shell">
-                <div className="content-page">
-                    <div className="content-card">
-                        <p>Cargando técnicos disponibles...</p>
-                    </div>
-                </div>
-            </div>
-        )
-    }
+    };
 
     return (
-        <div className="app-shell">
-            <header className="app-navbar">
-                <div className="app-brand">Mi Chamba</div>
-
-                <nav className="app-nav">
-                    <Link to="/dashboard">Inicio</Link>
-                    <Link to="/solicitudes">Solicitudes</Link>
-                    <Link to="/profile">Perfil</Link>
-                </nav>
-            </header>
-
-            <main className="content-page">
-                <div className="content-card solicitar-wrapper">
-                    <div className="solicitar-header">
-                        <div>
-                            <h1>Solicitar servicio</h1>
-                            <p>
-                                Elige un técnico disponible, agrega una descripción breve
-                                y envía tu solicitud.
-                            </p>
-                        </div>
-
-                        <Link to="/dashboard" className="panel-btn secondary-panel-btn">
-                            Volver al dashboard
-                        </Link>
+        <div className="content-page solicitar-wrapper">
+            <div className="content-card solicitudes-page-card">
+                <div className="solicitar-header">
+                    <div>
+                        <span className="dashboard-chip">Cliente</span>
+                        <h1>Solicitar servicio</h1>
+                        <p>
+                            Encuentra técnicos cercanos, revisa su perfil y envía tu solicitud
+                            desde un solo lugar.
+                        </p>
                     </div>
+                </div>
 
+                {ubicacion ? (
+                    <p style={{ marginTop: 0 }}>Ubicación detectada correctamente.</p>
+                ) : (
+                    <p style={{ marginTop: 0 }}>
+                        {ubicacionError || "Obteniendo ubicación..."}
+                    </p>
+                )}
+
+                {cargando && <p>Cargando técnicos...</p>}
+
+                {!cargando && (
                     <div className="solicitar-layout">
-                        <section className="tecnicos-panel">
+                        <div className="tecnicos-panel">
                             <h2>Técnicos disponibles</h2>
 
                             <input
+                                className="tecnico-search"
                                 type="text"
                                 placeholder="Buscar por nombre o especialidad"
-                                value={filtro}
-                                onChange={(e) => setFiltro(e.target.value)}
-                                className="tecnico-search"
+                                value={busqueda}
+                                onChange={(e) => setBusqueda(e.target.value)}
                             />
 
+                            <div className="field-group" style={{ marginBottom: "1rem" }}>
+                                <label>Filtrar por especialidad</label>
+                                <select
+                                    value={especialidadFiltro}
+                                    onChange={(e) => setEspecialidadFiltro(e.target.value)}
+                                >
+                                    <option value="">Todas</option>
+                                    {especialidades.map((esp) => (
+                                        <option key={esp} value={esp}>
+                                            {esp}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
                             <div className="tecnicos-list">
-                                {tecnicosFiltrados.length === 0 ? (
-                                    <p>No se encontraron técnicos disponibles.</p>
-                                ) : (
-                                    tecnicosFiltrados.map((tecnico) => (
-                                        <div
-                                            key={tecnico.id}
-                                            className={`tecnico-card-select ${selectedTecnico?.id === tecnico.id
-                                                    ? "tecnico-card-active"
-                                                    : ""
-                                                }`}
-                                        >
-                                            <div className="tecnico-card-top">
-                                                <h3>{tecnico.nombre}</h3>
-                                                <span className="tecnico-tag">
+                                {tecnicosFiltrados.length === 0 && (
+                                    <div className="empty-solicitudes-box">
+                                        No se encontraron técnicos con ese filtro.
+                                    </div>
+                                )}
+
+                                {tecnicosFiltrados.map((tecnico) => (
+                                    <div
+                                        key={tecnico.id}
+                                        className={`tecnico-card-select ${tecnicoSeleccionado?.id === tecnico.id
+                                                ? "tecnico-card-active"
+                                                : ""
+                                            }`}
+                                        onClick={() => setTecnicoSeleccionado(tecnico)}
+                                        style={{ cursor: "pointer" }}
+                                    >
+                                        <div className="tecnico-card-top">
+                                            <div>
+                                                <h3 style={{ margin: 0 }}>{tecnico.nombre}</h3>
+                                                <p className="tecnico-description">
                                                     {tecnico.especialidad}
-                                                </span>
+                                                </p>
                                             </div>
 
-                                            <p>
-                                                <strong>Experiencia:</strong>{" "}
-                                                {tecnico.experiencia_anios ?? 0} años
-                                            </p>
-
-                                            <p>
-                                                <strong>Calificación:</strong>{" "}
-                                                {tecnico.calificacion_promedio ?? 0}
-                                            </p>
-
-                                            <p>
-                                                <strong>Trabajos completados:</strong>{" "}
-                                                {tecnico.trabajos_completados ?? 0}
-                                            </p>
-
-                                            <p>
-                                                <strong>Teléfono:</strong>{" "}
-                                                {tecnico.telefono || "No disponible"}
-                                            </p>
-
-                                            <p className="tecnico-description">
-                                                {tecnico.descripcion || "Sin descripción."}
-                                            </p>
-
-                                            <div className="verification-row">
-                                                {tecnico.identidad_verificada && (
-                                                    <span className="mini-badge success">
-                                                        Identidad verificada
-                                                    </span>
-                                                )}
-                                                {tecnico.antecedentes_verificados && (
-                                                    <span className="mini-badge success">
-                                                        Antecedentes verificados
-                                                    </span>
-                                                )}
-                                                {tecnico.tecnico_verificado && (
-                                                    <span className="mini-badge highlight">
-                                                        Técnico verificado
-                                                    </span>
-                                                )}
-                                            </div>
-
-                                            <button
-                                                type="button"
-                                                className="panel-btn primary-panel-btn"
-                                                onClick={() => handleSelectTecnico(tecnico)}
-                                            >
-                                                {selectedTecnico?.id === tecnico.id
-                                                    ? "Técnico seleccionado"
-                                                    : "Seleccionar técnico"}
-                                            </button>
+                                            <span className="tecnico-tag">
+                                                {tecnico.calificacion_promedio ?? 0} ★
+                                            </span>
                                         </div>
-                                    ))
+
+                                        <p className="tecnico-description">
+                                            {tecnico.descripcion || "Sin descripción"}
+                                        </p>
+
+                                        <div className="verification-row">
+                                            {tecnico.tecnico_verificado && (
+                                                <span className="mini-badge success">Verificado</span>
+                                            )}
+                                            {tecnico.identidad_verificada && (
+                                                <span className="mini-badge highlight">Identidad</span>
+                                            )}
+                                            {tecnico.antecedentes_verificados && (
+                                                <span className="mini-badge highlight">
+                                                    Antecedentes
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="solicitud-form-panel">
+                            <h2>Mapa y solicitud</h2>
+
+                            <div
+                                className={`selected-tecnico-box ${!tecnicoSeleccionado ? "empty" : ""
+                                    }`}
+                            >
+                                {tecnicoSeleccionado ? (
+                                    <>
+                                        <h3 style={{ marginTop: 0 }}>{tecnicoSeleccionado.nombre}</h3>
+                                        <p>
+                                            <b>Especialidad:</b> {tecnicoSeleccionado.especialidad}
+                                        </p>
+                                        <p>
+                                            <b>Teléfono:</b>{" "}
+                                            {tecnicoSeleccionado.telefono || "No disponible"}
+                                        </p>
+                                        <p>
+                                            <b>Experiencia:</b>{" "}
+                                            {tecnicoSeleccionado.experiencia_anios ?? 0} años
+                                        </p>
+                                    </>
+                                ) : (
+                                    <p>Selecciona un técnico desde la lista o el mapa.</p>
                                 )}
                             </div>
-                        </section>
 
-                        <section className="solicitud-form-panel">
-                            <h2>Formulario de solicitud</h2>
+                            <MapaArcgis
+                                tecnicos={tecnicosFiltrados}
+                                ubicacionCliente={ubicacion}
+                                tecnicoSeleccionadoId={tecnicoSeleccionado?.id ?? null}
+                                onSelectTecnico={setTecnicoSeleccionado}
+                            />
 
-                            {selectedTecnico ? (
-                                <div className="selected-tecnico-box">
-                                    <p>
-                                        <strong>Técnico elegido:</strong>{" "}
-                                        {selectedTecnico.nombre}
-                                    </p>
-                                    <p>
-                                        <strong>Especialidad:</strong>{" "}
-                                        {selectedTecnico.especialidad}
-                                    </p>
-                                </div>
-                            ) : (
-                                <div className="selected-tecnico-box empty">
-                                    <p>Aún no has seleccionado un técnico.</p>
-                                </div>
-                            )}
-
-                            <form onSubmit={handleSubmit} className="auth-form">
-                                <label>Servicio solicitado</label>
-                                <input
-                                    type="text"
-                                    placeholder="Ejemplo: Reparación eléctrica"
-                                    value={servicio}
-                                    onChange={(e) => setServicio(e.target.value)}
-                                    required
-                                />
-
-                                <label>Descripción del problema</label>
-                                <textarea
-                                    placeholder="Describe qué necesitas, qué falla presenta o qué tipo de ayuda buscas."
-                                    value={descripcion}
-                                    onChange={(e) => setDescripcion(e.target.value)}
-                                    rows="5"
-                                />
-
-                                <label>Ubicación del cliente</label>
-                                <div className="location-grid">
+                            <form
+                                className="auth-form"
+                                onSubmit={enviarSolicitud}
+                                style={{ marginTop: "1rem" }}
+                            >
+                                <div className="field-group">
+                                    <label>Servicio que necesitas</label>
                                     <input
-                                        type="number"
-                                        step="any"
-                                        placeholder="Latitud"
-                                        value={clienteLat}
-                                        onChange={(e) => setClienteLat(e.target.value)}
-                                        required
-                                    />
-
-                                    <input
-                                        type="number"
-                                        step="any"
-                                        placeholder="Longitud"
-                                        value={clienteLng}
-                                        onChange={(e) => setClienteLng(e.target.value)}
-                                        required
+                                        type="text"
+                                        placeholder="Ej. Reparación de fuga en cocina"
+                                        value={servicio}
+                                        onChange={(e) => setServicio(e.target.value)}
                                     />
                                 </div>
 
-                                <button
-                                    type="button"
-                                    className="panel-btn secondary-panel-btn location-btn"
-                                    onClick={obtenerUbicacion}
-                                >
-                                    Usar mi ubicación actual
-                                </button>
+                                <div className="field-group">
+                                    <label>Descripción</label>
+                                    <textarea
+                                        rows="4"
+                                        placeholder="Describe el problema o lo que necesitas"
+                                        value={descripcion}
+                                        onChange={(e) => setDescripcion(e.target.value)}
+                                    />
+                                </div>
 
-                                <button type="submit" disabled={sending}>
-                                    {sending ? "Enviando solicitud..." : "Enviar solicitud"}
+                                {error && <div className="form-feedback error">{error}</div>}
+                                {mensaje && <div className="form-feedback success">{mensaje}</div>}
+
+                                <button type="submit" disabled={enviando}>
+                                    {enviando ? "Enviando..." : "Enviar solicitud"}
                                 </button>
                             </form>
-
-                            {message && <p className="auth-message">{message}</p>}
-                        </section>
+                        </div>
                     </div>
-                </div>
-            </main>
+                )}
+            </div>
         </div>
-    )
+    );
 }
-
-export default SolicitarServicio

@@ -1,11 +1,16 @@
 ﻿import { useEffect, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { supabase } from "../lib/supabase"
+import MapaClienteSolicitud from "../components/MapaClienteSolicitud"
 
 function Solicitudes() {
     const [solicitudes, setSolicitudes] = useState([])
     const [loading, setLoading] = useState(true)
     const [role, setRole] = useState("")
+    const [currentUserId, setCurrentUserId] = useState(null)
+    const [borrandoId, setBorrandoId] = useState(null)
+    const [actualizandoId, setActualizandoId] = useState(null)
+    const [mapaAbiertoId, setMapaAbiertoId] = useState(null)
     const navigate = useNavigate()
 
     useEffect(() => {
@@ -19,6 +24,8 @@ function Solicitudes() {
                     navigate("/login")
                     return
                 }
+
+                setCurrentUserId(user.id)
 
                 const { data: profileData } = await supabase
                     .from("profiles")
@@ -62,6 +69,8 @@ function Solicitudes() {
                             descripcion,
                             estado,
                             created_at,
+                            cliente_lat,
+                            cliente_lng,
                             cliente:cliente_id (
                                 id,
                                 email
@@ -81,6 +90,100 @@ function Solicitudes() {
 
         fetchSolicitudes()
     }, [navigate])
+
+    const eliminarSolicitud = async (solicitudId) => {
+        const confirmar = window.confirm("¿Seguro que quieres borrar esta solicitud?")
+        if (!confirmar) return
+
+        try {
+            setBorrandoId(solicitudId)
+
+            const { error } = await supabase
+                .from("solicitudes")
+                .delete()
+                .eq("id", solicitudId)
+                .eq("cliente_id", currentUserId)
+
+            if (error) {
+                console.error("Error borrando solicitud:", error)
+                alert("No se pudo borrar la solicitud.")
+                return
+            }
+
+            setSolicitudes((prev) =>
+                prev.filter((solicitud) => solicitud.id !== solicitudId)
+            )
+
+            alert("Solicitud borrada correctamente.")
+        } catch (error) {
+            console.error("Error inesperado al borrar:", error)
+            alert("Ocurrió un error al borrar la solicitud.")
+        } finally {
+            setBorrandoId(null)
+        }
+    }
+
+    const actualizarEstadoSolicitud = async (solicitudId, nuevoEstado) => {
+        const textoAccion =
+            nuevoEstado === "aceptada" ? "aceptar" : "rechazar"
+
+        const confirmar = window.confirm(
+            `¿Seguro que quieres ${textoAccion} esta solicitud?`
+        )
+        if (!confirmar) return
+
+        try {
+            setActualizandoId(solicitudId)
+
+            const { error } = await supabase
+                .from("solicitudes")
+                .update({ estado: nuevoEstado })
+                .eq("id", solicitudId)
+                .eq("tecnico_id", currentUserId)
+
+            if (error) {
+                console.error("Error actualizando solicitud:", error)
+                alert("No se pudo actualizar el estado de la solicitud.")
+                return
+            }
+
+            setSolicitudes((prev) =>
+                prev.map((solicitud) =>
+                    solicitud.id === solicitudId
+                        ? { ...solicitud, estado: nuevoEstado }
+                        : solicitud
+                )
+            )
+
+            alert(
+                nuevoEstado === "aceptada"
+                    ? "Solicitud aceptada correctamente."
+                    : "Solicitud rechazada correctamente."
+            )
+        } catch (error) {
+            console.error("Error inesperado al actualizar:", error)
+            alert("Ocurrió un error al actualizar la solicitud.")
+        } finally {
+            setActualizandoId(null)
+        }
+    }
+
+    const toggleMapaCliente = (solicitudId) => {
+        setMapaAbiertoId((prev) => (prev === solicitudId ? null : solicitudId))
+    }
+
+    const abrirEnGoogleMaps = (lat, lng) => {
+        if (lat == null || lng == null) {
+            alert("Esta solicitud no tiene ubicación disponible.")
+            return
+        }
+
+        const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+            `${lat},${lng}`
+        )}`
+
+        window.open(url, "_blank")
+    }
 
     const formatFecha = (fecha) => {
         if (!fecha) return "Sin fecha"
@@ -172,18 +275,14 @@ function Solicitudes() {
                                                     <h3>{solicitud.servicio}</h3>
                                                     <p className="solicitud-date">
                                                         Creada el{" "}
-                                                        {formatFecha(
-                                                            solicitud.created_at
-                                                        )}
+                                                        {formatFecha(solicitud.created_at)}
                                                     </p>
                                                 </div>
 
                                                 <span
                                                     className={`estado-badge estado-${solicitud.estado}`}
                                                 >
-                                                    {getEstadoTexto(
-                                                        solicitud.estado
-                                                    )}
+                                                    {getEstadoTexto(solicitud.estado)}
                                                 </span>
                                             </div>
 
@@ -205,30 +304,38 @@ function Solicitudes() {
                                                     </p>
                                                     <p>
                                                         <strong>Especialidad:</strong>{" "}
-                                                        {solicitud.tecnico
-                                                            ?.especialidad ||
+                                                        {solicitud.tecnico?.especialidad ||
                                                             "No disponible"}
                                                     </p>
                                                     <p>
                                                         <strong>Teléfono:</strong>{" "}
-                                                        {solicitud.tecnico
-                                                            ?.telefono ||
+                                                        {solicitud.tecnico?.telefono ||
                                                             "No disponible"}
                                                     </p>
                                                     <p>
                                                         <strong>Calificación:</strong>{" "}
-                                                        {solicitud.tecnico
-                                                            ?.calificacion_promedio ??
-                                                            0}
+                                                        {solicitud.tecnico?.calificacion_promedio ?? 0}
                                                     </p>
 
-                                                    {solicitud.tecnico
-                                                        ?.tecnico_verificado && (
-                                                            <span className="mini-badge highlight">
-                                                                Técnico verificado
-                                                            </span>
-                                                        )}
+                                                    {solicitud.tecnico?.tecnico_verificado && (
+                                                        <span className="mini-badge highlight">
+                                                            Técnico verificado
+                                                        </span>
+                                                    )}
                                                 </div>
+                                            </div>
+
+                                            <div className="tecnico-card-footer">
+                                                <button
+                                                    type="button"
+                                                    className="panel-btn delete-btn"
+                                                    onClick={() => eliminarSolicitud(solicitud.id)}
+                                                    disabled={borrandoId === solicitud.id}
+                                                >
+                                                    {borrandoId === solicitud.id
+                                                        ? "Borrando..."
+                                                        : "Borrar solicitud"}
+                                                </button>
                                             </div>
                                         </div>
                                     ))}
@@ -277,15 +384,11 @@ function Solicitudes() {
                                                 <span
                                                     className={`estado-badge estado-${solicitud.estado}`}
                                                 >
-                                                    {getEstadoTexto(
-                                                        solicitud.estado
-                                                    )}
+                                                    {getEstadoTexto(solicitud.estado)}
                                                 </span>
 
                                                 <p className="solicitud-date">
-                                                    {formatFecha(
-                                                        solicitud.created_at
-                                                    )}
+                                                    {formatFecha(solicitud.created_at)}
                                                 </p>
                                             </div>
 
@@ -308,10 +411,96 @@ function Solicitudes() {
                                             </div>
 
                                             <div className="tecnico-card-footer">
-                                                <span className="mini-badge success">
-                                                    Solicitud recibida
-                                                </span>
+                                                <div className="panel-actions">
+                                                    {solicitud.cliente_lat != null && solicitud.cliente_lng != null ? (
+                                                        <>
+                                                            <button
+                                                                type="button"
+                                                                className="panel-btn secondary-panel-btn"
+                                                                onClick={() => toggleMapaCliente(solicitud.id)}
+                                                            >
+                                                                {mapaAbiertoId === solicitud.id
+                                                                    ? "Ocultar ubicación"
+                                                                    : "Ver ubicación"}
+                                                            </button>
+
+                                                            <button
+                                                                type="button"
+                                                                className="panel-btn google-maps-btn"
+                                                                onClick={() =>
+                                                                    abrirEnGoogleMaps(
+                                                                        solicitud.cliente_lat,
+                                                                        solicitud.cliente_lng
+                                                                    )
+                                                                }
+                                                            >
+                                                                Abrir en Google Maps
+                                                            </button>
+                                                        </>
+                                                    ) : (
+                                                        <span className="mini-badge rejected">
+                                                            Sin ubicación
+                                                        </span>
+                                                    )}
+
+                                                    {solicitud.estado === "pendiente" ? (
+                                                        <>
+                                                            <button
+                                                                type="button"
+                                                                className="panel-btn primary-panel-btn"
+                                                                onClick={() =>
+                                                                    actualizarEstadoSolicitud(
+                                                                        solicitud.id,
+                                                                        "aceptada"
+                                                                    )
+                                                                }
+                                                                disabled={actualizandoId === solicitud.id}
+                                                            >
+                                                                {actualizandoId === solicitud.id
+                                                                    ? "Procesando..."
+                                                                    : "Aceptar"}
+                                                            </button>
+
+                                                            <button
+                                                                type="button"
+                                                                className="panel-btn delete-btn"
+                                                                onClick={() =>
+                                                                    actualizarEstadoSolicitud(
+                                                                        solicitud.id,
+                                                                        "cancelada"
+                                                                    )
+                                                                }
+                                                                disabled={actualizandoId === solicitud.id}
+                                                            >
+                                                                {actualizandoId === solicitud.id
+                                                                    ? "Procesando..."
+                                                                    : "Rechazar"}
+                                                            </button>
+                                                        </>
+                                                    ) : solicitud.estado === "aceptada" ? (
+                                                        <span className="mini-badge success">
+                                                            Solicitud aceptada
+                                                        </span>
+                                                    ) : solicitud.estado === "cancelada" ? (
+                                                        <span className="mini-badge rejected">
+                                                            Solicitud rechazada
+                                                        </span>
+                                                    ) : (
+                                                        <span className="mini-badge success">
+                                                            Solicitud recibida
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
+
+                                            {mapaAbiertoId === solicitud.id &&
+                                                solicitud.cliente_lat != null &&
+                                                solicitud.cliente_lng != null && (
+                                                    <MapaClienteSolicitud
+                                                        lat={solicitud.cliente_lat}
+                                                        lng={solicitud.cliente_lng}
+                                                    />
+                                                )}
                                         </div>
                                     ))}
                                 </div>

@@ -2,6 +2,8 @@
 import { Link, useNavigate } from "react-router-dom"
 import { supabase } from "../lib/supabase"
 
+
+
 function Dashboard() {
     const [userEmail, setUserEmail] = useState("")
     const [userRole, setUserRole] = useState("")
@@ -358,11 +360,11 @@ function Dashboard() {
                                     mapa, revisar perfiles y solicitar un servicio.
                                 </p>
 
-                                <div className="panel-actions">
+                                    <div className="panel-actions">
                                         <Link to="/solicitar-servicio" className="panel-btn primary-panel-btn">
                                             Buscar técnicos
                                         </Link>
-                                </div>
+                                    </div>
                             </div>
                         </section>
                     </>

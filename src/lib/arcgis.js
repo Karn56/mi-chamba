@@ -1,0 +1,5 @@
+﻿import esriConfig from "@arcgis/core/config";
+
+esriConfig.apiKey = "AAPTaMQFVlFJV2pWByVmTErFTAg..VDTJ81S_LP-Kdx9Yfb7Vn20qTQY5TKpD0OqjCOyYyA_YOqTX-o6ku4Ws23F2qF6lualv_QHzyfOy9x7XtlcmUd3IHM0OY1-a-G7j62YXHlMwt-VZXwvyPRsnGRvi43aQKfehfhZIBOHsx7e7PD2pDS1Nk6bz1fUWJB8jJe1hfZkjGWVSGRMxq-AHRRsq1Mmjl6WAnekgI9TX0WFYbIcstUB1az0wi3Y7rb_xPoN96soU58qdVb6LRlCOtmTAz1qYHRLXfg..AT1_OEr9aTcB";
+
+export default esriConfig;
