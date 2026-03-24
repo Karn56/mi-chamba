@@ -9,8 +9,7 @@ function Home() {
 
                 <nav className="nav-links">
                     <a href="#">Inicio</a>
-                    <a href="#">Servicios</a>
-                    <a href="#">Técnicos</a>
+                    <Link to="/explorar">Información</Link>
                 </nav>
             </header>
 

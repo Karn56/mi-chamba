@@ -8,11 +8,15 @@ import Profile from "./pages/Profile";
 import Solicitudes from "./pages/Solicitudes";
 import MapaPrueba from "./pages/MapaPrueba";
 import SolicitarServicio from "./pages/SolicitarServicio";
+import Explorar from "./pages/Explorar";
+import ComentariosTecnico from "./pages/ComentariosTecnico";
 
 function App() {
     return (
         <BrowserRouter>
             <Routes>
+                <Route path="/comentarios-tecnico" element={<ComentariosTecnico />} />
+                <Route path="/explorar" element={<Explorar />} />
                 <Route path="/" element={<Home />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />

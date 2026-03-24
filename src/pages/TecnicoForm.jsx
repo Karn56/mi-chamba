@@ -1,239 +1,390 @@
-﻿import { useState } from "react"
-import { useNavigate, Link } from "react-router-dom"
-import { supabase } from "../lib/supabase"
+﻿import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { supabase } from "../lib/supabase";
+import SelectorUbicacionMapa from "../components/SelectorUbicacionMapa";
+
+const especialidadesDisponibles = [
+    "Plomería",
+    "Electricidad",
+    "Mecánica automotriz",
+    "Mecánica de motos",
+    "Electrodomésticos",
+    "Soporte técnico",
+    "Reparación de computadoras",
+    "Instalación de cámaras",
+    "Instalación de aire acondicionado",
+    "Refrigeración",
+    "Carpintería",
+    "Soldadura",
+    "Albañilería",
+    "Pintura",
+    "Jardinería",
+    "Cerrajería",
+    "Instalación de muebles",
+    "Limpieza de hogares",
+    "Lavado de vehículos",
+    "Tapicería",
+];
 
 function TecnicoForm() {
-    const [nombre, setNombre] = useState("")
-    const [telefono, setTelefono] = useState("")
-    const [especialidad, setEspecialidad] = useState("")
-    const [experienciaAnios, setExperienciaAnios] = useState("")
-    const [descripcion, setDescripcion] = useState("")
-    const [lat, setLat] = useState("")
-    const [lng, setLng] = useState("")
-    const [disponible, setDisponible] = useState(true)
+    const navigate = useNavigate();
 
-    const [identidadVerificada, setIdentidadVerificada] = useState(false)
-    const [antecedentesVerificados, setAntecedentesVerificados] = useState(false)
-    const [tecnicoVerificado, setTecnicoVerificado] = useState(false)
+    const [loading, setLoading] = useState(true);
+    const [guardando, setGuardando] = useState(false);
+    const [mensaje, setMensaje] = useState("");
+    const [error, setError] = useState("");
 
-    const [message, setMessage] = useState("")
-    const navigate = useNavigate()
+    const [formData, setFormData] = useState({
+        nombre: "",
+        telefono: "",
+        especialidad: "",
+        experiencia_anios: "",
+        descripcion: "",
+        lat: "",
+        lng: "",
+    });
 
-    const handleSubmit = async (e) => {
-        e.preventDefault()
-        setMessage("")
+    useEffect(() => {
+        const cargarPerfilTecnico = async () => {
+            try {
+                const {
+                    data: { user },
+                } = await supabase.auth.getUser();
 
-        const {
-            data: { user },
-            error: userError,
-        } = await supabase.auth.getUser()
+                if (!user) {
+                    navigate("/login");
+                    return;
+                }
 
-        if (userError || !user) {
-            setMessage("No se pudo identificar al usuario.")
-            return
-        }
-
-        const { error } = await supabase.from("tecnicos").upsert({
-            id: user.id,
+                const { data: tecnicoData, error } = await supabase
+                    .from("tecnicos")
+                    .select(`
             nombre,
             telefono,
             especialidad,
-            experiencia_anios: Number(experienciaAnios),
+            experiencia_anios,
             descripcion,
-            lat: Number(lat),
-            lng: Number(lng),
+            lat,
+            lng,
             disponible,
-            identidad_verificada: identidadVerificada,
-            antecedentes_verificados: antecedentesVerificados,
-            tecnico_verificado: tecnicoVerificado,
-        })
+            identidad_verificada,
+            antecedentes_verificados,
+            tecnico_verificado
+          `)
+                    .eq("id", user.id)
+                    .maybeSingle();
 
-        if (error) {
-            setMessage("Hubo un error al guardar el perfil técnico.")
-            return
+                if (error) {
+                    console.error("Error cargando técnico:", error);
+                }
+
+                if (tecnicoData) {
+                    setFormData({
+                        nombre: tecnicoData.nombre || "",
+                        telefono: tecnicoData.telefono || "",
+                        especialidad: tecnicoData.especialidad || "",
+                        experiencia_anios:
+                            tecnicoData.experiencia_anios !== null &&
+                                tecnicoData.experiencia_anios !== undefined
+                                ? String(tecnicoData.experiencia_anios)
+                                : "",
+                        descripcion: tecnicoData.descripcion || "",
+                        lat:
+                            tecnicoData.lat !== null &&
+                                tecnicoData.lat !== undefined &&
+                                Number(tecnicoData.lat) !== 0
+                                ? String(tecnicoData.lat)
+                                : "",
+                        lng:
+                            tecnicoData.lng !== null &&
+                                tecnicoData.lng !== undefined &&
+                                Number(tecnicoData.lng) !== 0
+                                ? String(tecnicoData.lng)
+                                : "",
+                    });
+                }
+            } catch (err) {
+                console.error("Error inesperado:", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        cargarPerfilTecnico();
+    }, [navigate]);
+
+    const handleChange = (e) => {
+        const { name, value, type, checked } = e.target;
+
+        setFormData((prev) => ({
+            ...prev,
+            [name]: type === "checkbox" ? checked : value,
+        }));
+    };
+
+    const handleUbicacionSeleccionada = (lat, lng) => {
+        setFormData((prev) => ({
+            ...prev,
+            lat: String(lat),
+            lng: String(lng),
+        }));
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setMensaje("");
+        setError("");
+
+        if (!formData.nombre.trim()) {
+            setError("Escribe tu nombre.");
+            return;
         }
 
-        setMessage(
-            "Perfil técnico guardado correctamente. Los documentos visuales aún no se almacenan, solo están indicados en el formulario."
-        )
+        if (!formData.especialidad.trim()) {
+            setError("Selecciona o escribe tu especialidad.");
+            return;
+        }
 
-        setTimeout(() => {
-            navigate("/dashboard")
-        }, 1500)
+        try {
+            setGuardando(true);
+
+            const {
+                data: { user },
+            } = await supabase.auth.getUser();
+
+            if (!user) {
+                setError("No hay sesión activa.");
+                return;
+            }
+
+            const { error } = await supabase.from("tecnicos").upsert({
+                id: user.id,
+                nombre: formData.nombre.trim(),
+                telefono: formData.telefono.trim() || null,
+                especialidad: formData.especialidad.trim(),
+                experiencia_anios: formData.experiencia_anios
+                    ? Number(formData.experiencia_anios)
+                    : 0,
+                descripcion: formData.descripcion.trim() || null,
+                lat: formData.lat !== "" ? Number(formData.lat) : null,
+                lng: formData.lng !== "" ? Number(formData.lng) : null,
+            })
+
+            if (error) {
+                console.error("Error guardando técnico:", error);
+                setError("No se pudo guardar el perfil técnico.");
+                return;
+            }
+
+            setMensaje("Perfil técnico guardado correctamente.");
+
+            setTimeout(() => {
+                navigate("/dashboard");
+            }, 1000);
+        } catch (err) {
+            console.error("Error inesperado:", err);
+            setError("Ocurrió un error al guardar el perfil.");
+        } finally {
+            setGuardando(false);
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="app-shell">
+                <div className="content-page">
+                    <div className="content-card">
+                        <p>Cargando perfil técnico...</p>
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     return (
-        <div className="auth-page">
-            <div className="auth-card tecnico-card">
-                <h1>Perfil técnico</h1>
-                <p>
-                    Completa tu información profesional para aparecer en Mi Chamba.
-                </p>
+        <div className="app-shell">
+            <header className="app-navbar">
+                <div className="app-brand">Mi Chamba</div>
 
-                <form onSubmit={handleSubmit} className="auth-form">
-                    <div className="form-section">
-                        <h2>Información general</h2>
+                <nav className="app-nav">
+                    <Link to="/dashboard">Inicio</Link>
+                    <Link to="/solicitudes">Solicitudes</Link>
+                    <Link to="/profile">Perfil</Link>
+                </nav>
+            </header>
 
-                        <div className="form-grid">
-                            <div className="field-group">
-                                <label>Nombre completo</label>
-                                <input
-                                    type="text"
-                                    placeholder="Juan Pérez"
-                                    value={nombre}
-                                    onChange={(e) => setNombre(e.target.value)}
-                                    required
-                                />
-                            </div>
+            <main className="content-page">
+                <div className="content-card tecnico-form-card">
+                    <span className="dashboard-chip tecnico-chip">Perfil técnico</span>
+                    <h1>Completa tu perfil profesional</h1>
+                    <p>
+                        Llena tu información para mejorar tu visibilidad dentro de Mi Chamba
+                        y generar más confianza en los clientes.
+                    </p>
 
-                            <div className="field-group">
-                                <label>Teléfono</label>
-                                <input
-                                    type="text"
-                                    placeholder="7000-0000"
-                                    value={telefono}
-                                    onChange={(e) => setTelefono(e.target.value)}
-                                    required
-                                />
-                            </div>
+                    <form className="auth-form" onSubmit={handleSubmit}>
+                        <div className="form-section">
+                            <h2>Información básica</h2>
 
-                            <div className="field-group">
-                                <label>Especialidad</label>
-                                <select
-                                    value={especialidad}
-                                    onChange={(e) => setEspecialidad(e.target.value)}
-                                    required
-                                >
-                                    <option value="">Selecciona una especialidad</option>
-                                    <option value="Plomería">Plomería</option>
-                                    <option value="Electricidad">Electricidad</option>
-                                    <option value="Mecánica automotriz">Mecánica automotriz</option>
-                                    <option value="Mecánica de motos">Mecánica de motos</option>
-                                    <option value="Electrodomésticos">Electrodomésticos</option>
-                                    <option value="Soporte técnico">Soporte técnico</option>
-                                    <option value="Reparación de computadoras">
-                                        Reparación de computadoras
-                                    </option>
-                                    <option value="Instalación de cámaras">
-                                        Instalación de cámaras
-                                    </option>
-                                    <option value="Instalación de aire acondicionado">
-                                        Instalación de aire acondicionado
-                                    </option>
-                                    <option value="Refrigeración">Refrigeración</option>
-                                    <option value="Carpintería">Carpintería</option>
-                                    <option value="Soldadura">Soldadura</option>
-                                    <option value="Albañilería">Albañilería</option>
-                                    <option value="Pintura">Pintura</option>
-                                    <option value="Jardinería">Jardinería</option>
-                                    <option value="Cerrajería">Cerrajería</option>
-                                    <option value="Instalación de muebles">
-                                        Instalación de muebles
-                                    </option>
-                                    <option value="Limpieza de hogares">Limpieza de hogares</option>
-                                    <option value="Lavado de vehículos">Lavado de vehículos</option>
-                                    <option value="Tapicería">Tapicería</option>
-                                </select>
-                            </div>
+                            <div className="form-grid">
+                                <div className="field-group">
+                                    <label>Nombre completo</label>
+                                    <input
+                                        type="text"
+                                        name="nombre"
+                                        value={formData.nombre}
+                                        onChange={handleChange}
+                                        placeholder="Ej. Carlos Hernández"
+                                    />
+                                </div>
 
-                            <div className="field-group">
-                                <label>Años de experiencia</label>
-                                <input
-                                    type="number"
-                                    placeholder="0"
-                                    value={experienciaAnios}
-                                    onChange={(e) => setExperienciaAnios(e.target.value)}
-                                    min="0"
-                                    required
-                                />
-                            </div>
+                                <div className="field-group">
+                                    <label>Teléfono</label>
+                                    <input
+                                        type="text"
+                                        name="telefono"
+                                        value={formData.telefono}
+                                        onChange={handleChange}
+                                        placeholder="Ej. 7012-3456"
+                                    />
+                                </div>
 
-                            <div className="field-group full-width">
-                                <label>Descripción profesional</label>
-                                <textarea
-                                    placeholder="Cuéntanos a qué te dedicas, qué tipo de trabajos haces y qué experiencia tienes."
-                                    value={descripcion}
-                                    onChange={(e) => setDescripcion(e.target.value)}
-                                    rows="4"
-                                    required
-                                />
+                                <div className="field-group">
+                                    <label>Especialidad</label>
+                                    <select
+                                        name="especialidad"
+                                        value={formData.especialidad}
+                                        onChange={handleChange}
+                                    >
+                                        <option value="">Selecciona una especialidad</option>
+                                        {especialidadesDisponibles.map((especialidad) => (
+                                            <option key={especialidad} value={especialidad}>
+                                                {especialidad}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="field-group">
+                                    <label>Años de experiencia</label>
+                                    <input
+                                        type="number"
+                                        name="experiencia_anios"
+                                        min="0"
+                                        value={formData.experiencia_anios}
+                                        onChange={handleChange}
+                                        placeholder="Ej. 5"
+                                    />
+                                </div>
+
+                                <div className="field-group full-width">
+                                    <label>Descripción</label>
+                                    <textarea
+                                        name="descripcion"
+                                        rows="4"
+                                        value={formData.descripcion}
+                                        onChange={handleChange}
+                                        placeholder="Cuéntale al cliente qué tipo de trabajos realizas."
+                                    />
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    <div className="form-section">
-                        <h2>Ubicación</h2>
+                        <div className="form-section">
+                            <h2>Ubicación en el mapa</h2>
+                            <p className="section-note">
+                                Haz clic en el mapa para seleccionar la ubicación donde ofreces
+                                tus servicios.
+                            </p>
 
-                        <input
-                            type="number"
-                            step="any"
-                            placeholder="Latitud"
-                            value={lat}
-                            onChange={(e) => setLat(e.target.value)}
-                            required
-                        />
+                            <SelectorUbicacionMapa
+                                lat={formData.lat}
+                                lng={formData.lng}
+                                onChangeUbicacion={handleUbicacionSeleccionada}
+                            />
 
-                        <input
-                            type="number"
-                            step="any"
-                            placeholder="Longitud"
-                            value={lng}
-                            onChange={(e) => setLng(e.target.value)}
-                            required
-                        />
+                            <div className="location-grid" style={{ marginTop: "1rem" }}>
+                                <div className="field-group">
+                                    <label>Latitud</label>
+                                    <input
+                                        type="number"
+                                        step="any"
+                                        name="lat"
+                                        value={formData.lat}
+                                        onChange={handleChange}
+                                        placeholder="Latitud"
+                                    />
+                                </div>
 
-                    </div>
+                                <div className="field-group">
+                                    <label>Longitud</label>
+                                    <input
+                                        type="number"
+                                        step="any"
+                                        name="lng"
+                                        value={formData.lng}
+                                        onChange={handleChange}
+                                        placeholder="Longitud"
+                                    />
+                                </div>
+                            </div>
+                        </div>
 
-                   
+                        <div className="form-section">
+                            <h2>Documentos y evidencias</h2>
+                            <p className="section-note">
+                                Puedes seleccionar archivos como referencia visual.
+                            </p>
 
-                    <div className="form-section">
-                        <h2>Documentación y evidencia</h2>
-                        <p className="section-note">
-                            Estos campos son visuales únicamente por el momento.
-                        </p>
+                            <div className="form-grid">
+                                <div className="field-group">
+                                    <label className="file-label">
+                                        DUI o documento de identidad
+                                        <input type="file" accept=".jpg,.jpeg,.png,.pdf" />
+                                    </label>
+                                </div>
 
-                        <label className="file-label">
-                            Foto de identidad / DUI
-                            <input type="file" accept=".pdf,.jpg,.jpeg,.png" />
-                        </label>
+                                <div className="field-group">
+                                    <label className="file-label">
+                                        Antecedentes o respaldo
+                                        <input type="file" accept=".jpg,.jpeg,.png,.pdf" />
+                                    </label>
+                                </div>
 
-                        <label className="file-label">
-                            Antecedentes penales o policiales
-                            <input type="file" accept=".pdf,.jpg,.jpeg,.png" />
-                        </label>
+                                <div className="field-group">
+                                    <label className="file-label">
+                                        Certificación o constancia
+                                        <input type="file" accept=".jpg,.jpeg,.png,.pdf" />
+                                    </label>
+                                </div>
 
-                        <label className="file-label">
-                            Certificación o diploma técnico
-                            <input type="file" accept=".pdf,.jpg,.jpeg,.png" />
-                        </label>
+                                <div className="field-group">
+                                    <label className="file-label">
+                                        Foto de trabajos realizados
+                                        <input type="file" accept=".jpg,.jpeg,.png" multiple />
+                                    </label>
+                                </div>
 
-                        <label className="file-label">
-                            Foto de trabajo realizado 1
-                            <input type="file" accept=".jpg,.jpeg,.png" />
-                        </label>
+                                <div className="field-group full-width">
+                                    <label className="file-label">
+                                        Otros respaldos
+                                        <input type="file" accept=".jpg,.jpeg,.png,.pdf,.doc,.docx" multiple />
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
 
-                        <label className="file-label">
-                            Foto de trabajo realizado 2
-                            <input type="file" accept=".jpg,.jpeg,.png" />
-                        </label>
+                        {error && <div className="form-feedback error">{error}</div>}
+                        {mensaje && <div className="form-feedback success">{mensaje}</div>}
 
-                        <label className="file-label">
-                            Otro documento de respaldo
-                            <input type="file" accept=".pdf,.jpg,.jpeg,.png" />
-                        </label>
-                    </div>
-
-                    <button type="submit">Guardar perfil técnico</button>
-                </form>
-
-                {message && <p className="auth-message">{message}</p>}
-
-                <p className="auth-link-text">
-                    <Link to="/dashboard">Volver al dashboard</Link>
-                </p>
-            </div>
+                        <button type="submit" disabled={guardando}>
+                            {guardando ? "Guardando..." : "Guardar perfil técnico"}
+                        </button>
+                    </form>
+                </div>
+            </main>
         </div>
-    )
+    );
 }
 
-export default TecnicoForm
+export default TecnicoForm;

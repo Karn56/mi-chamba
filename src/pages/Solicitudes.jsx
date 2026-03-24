@@ -11,6 +11,12 @@ function Solicitudes() {
     const [borrandoId, setBorrandoId] = useState(null)
     const [actualizandoId, setActualizandoId] = useState(null)
     const [mapaAbiertoId, setMapaAbiertoId] = useState(null)
+
+    const [calificandoId, setCalificandoId] = useState(null)
+    const [guardandoCalificacion, setGuardandoCalificacion] = useState(false)
+    const [puntuacion, setPuntuacion] = useState("")
+    const [comentario, setComentario] = useState("")
+
     const navigate = useNavigate()
 
     useEffect(() => {
@@ -52,6 +58,12 @@ function Solicitudes() {
                                 telefono,
                                 calificacion_promedio,
                                 tecnico_verificado
+                            ),
+                            calificaciones (
+                                id,
+                                puntuacion,
+                                comentario,
+                                created_at
                             )
                         `)
                         .eq("cliente_id", user.id)
@@ -124,8 +136,11 @@ function Solicitudes() {
     }
 
     const actualizarEstadoSolicitud = async (solicitudId, nuevoEstado) => {
-        const textoAccion =
-            nuevoEstado === "aceptada" ? "aceptar" : "rechazar"
+        let textoAccion = "actualizar"
+
+        if (nuevoEstado === "aceptada") textoAccion = "aceptar"
+        if (nuevoEstado === "cancelada") textoAccion = "rechazar"
+        if (nuevoEstado === "finalizada") textoAccion = "finalizar"
 
         const confirmar = window.confirm(
             `¿Seguro que quieres ${textoAccion} esta solicitud?`
@@ -155,11 +170,13 @@ function Solicitudes() {
                 )
             )
 
-            alert(
-                nuevoEstado === "aceptada"
-                    ? "Solicitud aceptada correctamente."
-                    : "Solicitud rechazada correctamente."
-            )
+            if (nuevoEstado === "aceptada") {
+                alert("Solicitud aceptada correctamente.")
+            } else if (nuevoEstado === "cancelada") {
+                alert("Solicitud rechazada correctamente.")
+            } else if (nuevoEstado === "finalizada") {
+                alert("Trabajo marcado como finalizado.")
+            }
         } catch (error) {
             console.error("Error inesperado al actualizar:", error)
             alert("Ocurrió un error al actualizar la solicitud.")
@@ -183,6 +200,71 @@ function Solicitudes() {
         )}`
 
         window.open(url, "_blank")
+    }
+
+    const abrirFormularioCalificacion = (solicitudId) => {
+        setCalificandoId(solicitudId)
+        setPuntuacion("")
+        setComentario("")
+    }
+
+    const cancelarCalificacion = () => {
+        setCalificandoId(null)
+        setPuntuacion("")
+        setComentario("")
+    }
+
+    const guardarCalificacion = async (solicitud) => {
+        if (!puntuacion) {
+            alert("Selecciona una puntuación.")
+            return
+        }
+
+        if (!solicitud.tecnico?.id) {
+            alert("No se encontró el técnico asociado a esta solicitud.")
+            return
+        }
+
+        try {
+            setGuardandoCalificacion(true)
+
+            const { data, error } = await supabase
+                .from("calificaciones")
+                .insert({
+                    solicitud_id: solicitud.id,
+                    cliente_id: currentUserId,
+                    tecnico_id: solicitud.tecnico.id,
+                    puntuacion: Number(puntuacion),
+                    comentario: comentario.trim() || null,
+                })
+                .select()
+                .single()
+
+            if (error) {
+                console.error("Error guardando calificación:", error)
+                alert("No se pudo guardar la calificación.")
+                return
+            }
+
+            setSolicitudes((prev) =>
+                prev.map((item) =>
+                    item.id === solicitud.id
+                        ? {
+                            ...item,
+                            calificaciones: [data],
+                        }
+                        : item
+                )
+            )
+
+            alert("Calificación guardada correctamente.")
+            cancelarCalificacion()
+        } catch (error) {
+            console.error("Error inesperado al calificar:", error)
+            alert("Ocurrió un error al guardar la calificación.")
+        } finally {
+            setGuardandoCalificacion(false)
+        }
     }
 
     const formatFecha = (fecha) => {
@@ -265,80 +347,179 @@ function Solicitudes() {
                                 </div>
                             ) : (
                                 <div className="cliente-solicitudes-list">
-                                    {solicitudes.map((solicitud) => (
-                                        <div
-                                            key={solicitud.id}
-                                            className="cliente-solicitud-card"
-                                        >
-                                            <div className="solicitud-card-top">
-                                                <div>
-                                                    <h3>{solicitud.servicio}</h3>
-                                                    <p className="solicitud-date">
-                                                        Creada el{" "}
-                                                        {formatFecha(solicitud.created_at)}
-                                                    </p>
+                                    {solicitudes.map((solicitud) => {
+                                        const yaCalificada =
+                                            solicitud.calificaciones &&
+                                            solicitud.calificaciones.length > 0
+
+                                        const calificacionExistente = yaCalificada
+                                            ? solicitud.calificaciones[0]
+                                            : null
+
+                                        return (
+                                            <div
+                                                key={solicitud.id}
+                                                className="cliente-solicitud-card"
+                                            >
+                                                <div className="solicitud-card-top">
+                                                    <div>
+                                                        <h3>{solicitud.servicio}</h3>
+                                                        <p className="solicitud-date">
+                                                            Creada el{" "}
+                                                            {formatFecha(solicitud.created_at)}
+                                                        </p>
+                                                    </div>
+
+                                                    <span
+                                                        className={`estado-badge estado-${solicitud.estado}`}
+                                                    >
+                                                        {getEstadoTexto(solicitud.estado)}
+                                                    </span>
                                                 </div>
 
-                                                <span
-                                                    className={`estado-badge estado-${solicitud.estado}`}
-                                                >
-                                                    {getEstadoTexto(solicitud.estado)}
-                                                </span>
-                                            </div>
+                                                <div className="solicitud-body-grid">
+                                                    <div>
+                                                        <h4>Descripción</h4>
+                                                        <p>
+                                                            {solicitud.descripcion ||
+                                                                "Sin descripción."}
+                                                        </p>
+                                                    </div>
 
-                                            <div className="solicitud-body-grid">
-                                                <div>
-                                                    <h4>Descripción</h4>
-                                                    <p>
-                                                        {solicitud.descripcion ||
-                                                            "Sin descripción."}
-                                                    </p>
+                                                    <div>
+                                                        <h4>Técnico asignado</h4>
+                                                        <p>
+                                                            <strong>Nombre:</strong>{" "}
+                                                            {solicitud.tecnico?.nombre ||
+                                                                "No disponible"}
+                                                        </p>
+                                                        <p>
+                                                            <strong>Especialidad:</strong>{" "}
+                                                            {solicitud.tecnico?.especialidad ||
+                                                                "No disponible"}
+                                                        </p>
+                                                        <p>
+                                                            <strong>Teléfono:</strong>{" "}
+                                                            {solicitud.tecnico?.telefono ||
+                                                                "No disponible"}
+                                                        </p>
+                                                        <p>
+                                                            <strong>Calificación promedio:</strong>{" "}
+                                                            {solicitud.tecnico?.calificacion_promedio ?? 0}
+                                                        </p>
+
+                                                        {solicitud.tecnico?.tecnico_verificado && (
+                                                            <span className="mini-badge highlight">
+                                                                Técnico verificado
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
 
-                                                <div>
-                                                    <h4>Técnico asignado</h4>
-                                                    <p>
-                                                        <strong>Nombre:</strong>{" "}
-                                                        {solicitud.tecnico?.nombre ||
-                                                            "No disponible"}
-                                                    </p>
-                                                    <p>
-                                                        <strong>Especialidad:</strong>{" "}
-                                                        {solicitud.tecnico?.especialidad ||
-                                                            "No disponible"}
-                                                    </p>
-                                                    <p>
-                                                        <strong>Teléfono:</strong>{" "}
-                                                        {solicitud.tecnico?.telefono ||
-                                                            "No disponible"}
-                                                    </p>
-                                                    <p>
-                                                        <strong>Calificación:</strong>{" "}
-                                                        {solicitud.tecnico?.calificacion_promedio ?? 0}
-                                                    </p>
+                                                {solicitud.estado === "finalizada" && (
+                                                    <div className="rating-box">
+                                                        <h4>Valoración del trabajo</h4>
 
-                                                    {solicitud.tecnico?.tecnico_verificado && (
-                                                        <span className="mini-badge highlight">
-                                                            Técnico verificado
-                                                        </span>
-                                                    )}
+                                                        {yaCalificada ? (
+                                                            <div className="existing-rating">
+                                                                <p>
+                                                                    <strong>Puntuación:</strong>{" "}
+                                                                    {calificacionExistente?.puntuacion} ★
+                                                                </p>
+                                                                <p>
+                                                                    <strong>Comentario:</strong>{" "}
+                                                                    {calificacionExistente?.comentario ||
+                                                                        "Sin comentario"}
+                                                                </p>
+                                                            </div>
+                                                        ) : calificandoId === solicitud.id ? (
+                                                            <div className="rating-form">
+                                                                <div className="field-group">
+                                                                    <label>Puntuación</label>
+                                                                    <select
+                                                                        value={puntuacion}
+                                                                        onChange={(e) =>
+                                                                            setPuntuacion(e.target.value)
+                                                                        }
+                                                                    >
+                                                                        <option value="">
+                                                                            Selecciona una puntuación
+                                                                        </option>
+                                                                        <option value="1">1 estrella</option>
+                                                                        <option value="2">2 estrellas</option>
+                                                                        <option value="3">3 estrellas</option>
+                                                                        <option value="4">4 estrellas</option>
+                                                                        <option value="5">5 estrellas</option>
+                                                                    </select>
+                                                                </div>
+
+                                                                <div className="field-group">
+                                                                    <label>Comentario</label>
+                                                                    <textarea
+                                                                        rows="3"
+                                                                        placeholder="Cuéntanos cómo fue tu experiencia"
+                                                                        value={comentario}
+                                                                        onChange={(e) =>
+                                                                            setComentario(e.target.value)
+                                                                        }
+                                                                    />
+                                                                </div>
+
+                                                                <div className="panel-actions">
+                                                                    <button
+                                                                        type="button"
+                                                                        className="panel-btn primary-panel-btn"
+                                                                        onClick={() =>
+                                                                            guardarCalificacion(solicitud)
+                                                                        }
+                                                                        disabled={guardandoCalificacion}
+                                                                    >
+                                                                        {guardandoCalificacion
+                                                                            ? "Guardando..."
+                                                                            : "Guardar calificación"}
+                                                                    </button>
+
+                                                                    <button
+                                                                        type="button"
+                                                                        className="panel-btn secondary-panel-btn"
+                                                                        onClick={cancelarCalificacion}
+                                                                        disabled={guardandoCalificacion}
+                                                                    >
+                                                                        Cancelar
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <button
+                                                                type="button"
+                                                                className="panel-btn primary-panel-btn"
+                                                                onClick={() =>
+                                                                    abrirFormularioCalificacion(
+                                                                        solicitud.id
+                                                                    )
+                                                                }
+                                                            >
+                                                                Calificar técnico
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                <div className="tecnico-card-footer">
+                                                    <button
+                                                        type="button"
+                                                        className="panel-btn delete-btn"
+                                                        onClick={() => eliminarSolicitud(solicitud.id)}
+                                                        disabled={borrandoId === solicitud.id}
+                                                    >
+                                                        {borrandoId === solicitud.id
+                                                            ? "Borrando..."
+                                                            : "Borrar solicitud"}
+                                                    </button>
                                                 </div>
                                             </div>
-
-                                            <div className="tecnico-card-footer">
-                                                <button
-                                                    type="button"
-                                                    className="panel-btn delete-btn"
-                                                    onClick={() => eliminarSolicitud(solicitud.id)}
-                                                    disabled={borrandoId === solicitud.id}
-                                                >
-                                                    {borrandoId === solicitud.id
-                                                        ? "Borrando..."
-                                                        : "Borrar solicitud"}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
+                                        )
+                                    })}
                                 </div>
                             )}
                         </>
@@ -412,12 +593,15 @@ function Solicitudes() {
 
                                             <div className="tecnico-card-footer">
                                                 <div className="panel-actions">
-                                                    {solicitud.cliente_lat != null && solicitud.cliente_lng != null ? (
+                                                    {solicitud.cliente_lat != null &&
+                                                        solicitud.cliente_lng != null ? (
                                                         <>
                                                             <button
                                                                 type="button"
                                                                 className="panel-btn secondary-panel-btn"
-                                                                onClick={() => toggleMapaCliente(solicitud.id)}
+                                                                onClick={() =>
+                                                                    toggleMapaCliente(solicitud.id)
+                                                                }
                                                             >
                                                                 {mapaAbiertoId === solicitud.id
                                                                     ? "Ocultar ubicación"
@@ -478,12 +662,34 @@ function Solicitudes() {
                                                             </button>
                                                         </>
                                                     ) : solicitud.estado === "aceptada" ? (
-                                                        <span className="mini-badge success">
-                                                            Solicitud aceptada
-                                                        </span>
+                                                        <>
+                                                            <button
+                                                                type="button"
+                                                                className="panel-btn primary-panel-btn"
+                                                                onClick={() =>
+                                                                    actualizarEstadoSolicitud(
+                                                                        solicitud.id,
+                                                                        "finalizada"
+                                                                    )
+                                                                }
+                                                                disabled={actualizandoId === solicitud.id}
+                                                            >
+                                                                {actualizandoId === solicitud.id
+                                                                    ? "Procesando..."
+                                                                    : "Marcar como finalizada"}
+                                                            </button>
+
+                                                            <span className="mini-badge success">
+                                                                Trabajo aceptado
+                                                            </span>
+                                                        </>
                                                     ) : solicitud.estado === "cancelada" ? (
                                                         <span className="mini-badge rejected">
                                                             Solicitud rechazada
+                                                        </span>
+                                                    ) : solicitud.estado === "finalizada" ? (
+                                                        <span className="mini-badge success">
+                                                            Trabajo finalizado
                                                         </span>
                                                     ) : (
                                                         <span className="mini-badge success">

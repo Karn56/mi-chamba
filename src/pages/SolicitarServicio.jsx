@@ -2,8 +2,11 @@
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import MapaArcgis from "../components/MapaArcgis";
+import SelectorUbicacionMapa from "../components/SelectorUbicacionMapa";
 
 export default function SolicitarServicio() {
+    const navigate = useNavigate();
+
     const [usuario, setUsuario] = useState(null);
     const [ubicacion, setUbicacion] = useState(null);
     const [ubicacionError, setUbicacionError] = useState("");
@@ -21,7 +24,6 @@ export default function SolicitarServicio() {
     const [enviando, setEnviando] = useState(false);
     const [error, setError] = useState("");
     const [mensaje, setMensaje] = useState("");
-    const navigate = useNavigate();
 
     useEffect(() => {
         const cargarDatos = async () => {
@@ -85,6 +87,10 @@ export default function SolicitarServicio() {
     }, []);
 
     useEffect(() => {
+        usarUbicacionActual();
+    }, []);
+
+    const usarUbicacionActual = () => {
         if (!navigator.geolocation) {
             setUbicacionError("Tu navegador no permite obtener ubicación.");
             return;
@@ -93,16 +99,24 @@ export default function SolicitarServicio() {
         navigator.geolocation.getCurrentPosition(
             (pos) => {
                 setUbicacion({
-                    lat: pos.coords.latitude,
-                    lng: pos.coords.longitude,
+                    lat: Number(pos.coords.latitude.toFixed(6)),
+                    lng: Number(pos.coords.longitude.toFixed(6)),
                 });
                 setUbicacionError("");
             },
             () => {
-                setUbicacionError("No se pudo obtener tu ubicación.");
+                setUbicacionError("No se pudo obtener tu ubicación actual.");
             }
         );
-    }, []);
+    };
+
+    const handleUbicacionSeleccionada = (lat, lng) => {
+        setUbicacion({
+            lat,
+            lng,
+        });
+        setUbicacionError("");
+    };
 
     const especialidades = useMemo(() => {
         return [...new Set(tecnicos.map((t) => t.especialidad).filter(Boolean))].sort();
@@ -135,7 +149,7 @@ export default function SolicitarServicio() {
             return;
         }
 
-        if (!ubicacion?.lat || !ubicacion?.lng) {
+        if (ubicacion?.lat == null || ubicacion?.lng == null) {
             setError("Necesitamos tu ubicación para enviar la solicitud.");
             return;
         }
@@ -198,14 +212,6 @@ export default function SolicitarServicio() {
                         </p>
                     </div>
                 </div>
-
-                {ubicacion ? (
-                    <p style={{ marginTop: 0 }}>Ubicación detectada correctamente.</p>
-                ) : (
-                    <p style={{ marginTop: 0 }}>
-                        {ubicacionError || "Obteniendo ubicación..."}
-                    </p>
-                )}
 
                 {cargando && <p>Cargando técnicos...</p>}
 
@@ -290,7 +296,41 @@ export default function SolicitarServicio() {
                         </div>
 
                         <div className="solicitud-form-panel">
-                            <h2>Mapa y solicitud</h2>
+                            <h2>Ubicación, mapa y solicitud</h2>
+
+                            <div className="form-section">
+                                <h2>Ubicación del cliente</h2>
+                                <p className="section-note">
+                                    Puedes usar tu ubicación actual o seleccionar manualmente en el
+                                    mapa el punto donde necesitas el servicio.
+                                </p>
+
+                                <div className="panel-actions" style={{ marginBottom: "1rem" }}>
+                                    <button
+                                        type="button"
+                                        className="panel-btn secondary-panel-btn"
+                                        onClick={usarUbicacionActual}
+                                    >
+                                        Usar mi ubicación actual
+                                    </button>
+                                </div>
+
+                                {ubicacion ? (
+                                    <p className="section-note">
+                                        Ubicación seleccionada: {ubicacion.lat}, {ubicacion.lng}
+                                    </p>
+                                ) : (
+                                    <p className="section-note">
+                                        {ubicacionError || "Aún no has seleccionado una ubicación."}
+                                    </p>
+                                )}
+
+                                <SelectorUbicacionMapa
+                                    lat={ubicacion?.lat ?? ""}
+                                    lng={ubicacion?.lng ?? ""}
+                                    onChangeUbicacion={handleUbicacionSeleccionada}
+                                />
+                            </div>
 
                             <div
                                 className={`selected-tecnico-box ${!tecnicoSeleccionado ? "empty" : ""

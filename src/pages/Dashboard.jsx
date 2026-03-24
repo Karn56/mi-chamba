@@ -201,6 +201,7 @@ function Dashboard() {
                             <div className="dashboard-panel tecnico-panel">
                                 <h2>Estado profesional</h2>
 
+
                                 <div className="tecnico-metric-list">
                                     <p>
                                         <strong>Especialidad:</strong>{" "}
@@ -220,6 +221,20 @@ function Dashboard() {
                                         <strong>Servicios completados:</strong>{" "}
                                         {tecnicoTrabajos}
                                     </p>
+                                </div>
+                            </div>
+
+                            <div className="dashboard-panel">
+                                <h2>Comentarios recibidos</h2>
+                                <p>
+                                    Revisa lo que tus clientes han opinado sobre tus trabajos
+                                    finalizados y consulta tus calificaciones.
+                                </p>
+
+                                <div className="panel-actions">
+                                    <Link to="/comentarios-tecnico" className="panel-btn secondary-panel-btn">
+                                        Ver comentarios
+                                    </Link>
                                 </div>
                             </div>
 
@@ -356,8 +371,8 @@ function Dashboard() {
                             <div className="dashboard-panel accent-panel">
                                 <h2>Explorar técnicos</h2>
                                 <p>
-                                    Próximamente podrás visualizar técnicos cercanos en el
-                                    mapa, revisar perfiles y solicitar un servicio.
+                                    Visualiza técinos en el
+                                    mapa, revisa perfiles y solicita un servicio.
                                 </p>
 
                                     <div className="panel-actions">
