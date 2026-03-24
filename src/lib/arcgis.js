@@ -1,9 +1,9 @@
 ﻿import esriConfig from "@arcgis/core/config";
 
-<<<<<<< HEAD
+
 esriConfig.apiKey = "AAPTam00ql8QSxI0b7oA0v8S03w..y5dXzxym4PCUDMcYrgRexO5rySmkj-w7Pt5X0FcOcfHjjn6SdUKvB6BKKMX7tm8mwmCyRg0HHAiSL_mYdrHknX9E-hA4fDre5vSB7wB12dGtWEwOe7UCGe6tSZYrR0iVUhQAmuFRO8wwXIC30n0vWFhAOK9yreyZoOHHwbayQ6ME1S5vL_gmgxgUoNlvhg4Ab6m_5YdjX2ef9reZKA8WvRZ2Jbqui7ow68N8OxoR-AWbnp8HqgS5EGK7XZgm8BinTxrWHA..AT1_OEr9aTcB";
-=======
+
 esriConfig.apiKey = "AAPTaIEYSdbYfJbWMdIv95JC0eQ..iYhSkRLs-SVAo6-5efyn1ASzl4UPftFf2qb0aShQ2xB63-etWI-DEKPolrG7DLXwUA5srJC_A5LDpd1gIyACwkJ7SjDECptp4bi2Q58Z-KYrnEgGlIVrspTEPtFr1A7kgLkhaVYt469Y03oN99w8HP2xLOXnMZ8ZRJ0Sd0o3Yxr3BWDWNr2h3Lfp39eqrBig-lOEmMiyqlRtildCWpjlGwg8W1SEpjFEFjvrJARt2TKDU3wXqMpDxVqZoQ0IUkRo1MKWPw..AT1_OEr9aTcB";
->>>>>>> 2f3ecdb088aaac9e9b37f77d32c7cabe139184d9
+
 
 export default esriConfig;
